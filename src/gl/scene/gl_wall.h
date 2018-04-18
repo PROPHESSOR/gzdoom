@@ -107,6 +107,7 @@ struct GLSectorPlane
 };
 
 struct FDrawInfo;
+class IWallBuilder;
 
 class GLWall
 {
@@ -144,8 +145,9 @@ public:
 
 	friend struct GLDrawList;
 	friend class GLPortal;
+    friend class IWallBuilder;
 
-	GLSceneDrawer *mDrawer;
+	IWallBuilder *mBuilder;
 	vertex_t * vertexes[2];				// required for polygon splitting
 	FMaterial *gltexture;
 	TArray<lightlist_t> *lightlist;
@@ -196,10 +198,9 @@ public:
 	subsector_t * sub;		// For polyobjects
 private:
 
-	void CheckGlowing();
-	bool PutWallCompat(int passflag);
-	void PutWall(bool translucent);
-	void PutPortal(int ptype);
+    void PutWall(bool translucent);
+    void PutPortal(int ptype);
+
 	void CheckTexturePosition(FTexCoordInfo *tci);
 
 	void RenderFogBoundaryCompat();
@@ -211,7 +212,6 @@ private:
 
 	void SetupLights();
 	bool PrepareLight(ADynamicLight * light, int pass);
-	void MakeVertices(bool nosplit);
 	void RenderWall(int textured);
 	void RenderTextured(int rflags);
 
@@ -269,12 +269,10 @@ private:
 	void SplitUpperEdge(FFlatVertex *&ptr);
 	void SplitLowerEdge(FFlatVertex *&ptr);
 
-public:
+    void Process(seg_t *seg, sector_t *frontsector, sector_t *backsector);
+    void ProcessLowerMiniseg(seg_t *seg, sector_t *frontsector, sector_t *backsector);
 
-	GLWall(GLSceneDrawer *drawer)
-	{
-		mDrawer = drawer;
-	}
+public:
 
 	GLWall(const GLWall &other)
 	{
@@ -287,8 +285,7 @@ public:
 		return *this;
 	}
 
-	void Process(seg_t *seg, sector_t *frontsector, sector_t *backsector);
-	void ProcessLowerMiniseg(seg_t *seg, sector_t *frontsector, sector_t *backsector);
+    void MakeVertices(bool nosplit);
 	void Draw(int pass);
 
 	float PointOnSide(float x,float y)
@@ -305,6 +302,49 @@ public:
 		float dx = w2->glseg.x2, dy=w2->glseg.y2;
 		return ((ay-cy)*(dx-cx)-(ax-cx)*(dy-cy)) / ((bx-ax)*(dy-cy)-(by-ay)*(dx-cx));
 	}
+
+};
+
+
+class IWallBuilder
+{
+    GLWall *mWall;
+
+public:
+    int FixedColormap = CM_DEFAULT;
+
+    IWallBuilder(GLWall *wall)
+    {
+
+        mWall = wall;
+        wall->mBuilder = this;
+    }
+    
+    virtual void PutWall(GLWall *wall) = 0;
+    virtual void PutPortal(GLWall *wall, int ptype) = 0;
+    void Process(seg_t *seg, sector_t *frontsector, sector_t *backsector)
+    {
+        mWall->Process(seg, frontsector, backsector);
+    }
+    void ProcessLowerMiniseg(seg_t *seg, sector_t *frontsector, sector_t *backsector)
+    {
+        mWall->ProcessLowerMiniseg(seg, frontsector, backsector);
+    }
+};
+
+class GLWallBuilder : public IWallBuilder
+{
+    GLSceneDrawer *mDrawer;
+
+public:
+    GLWallBuilder(GLSceneDrawer *drawer, GLWall *wall)
+    : IWallBuilder(wall)
+    {
+        mDrawer = drawer;
+    }
+
+    void PutWall(GLWall *wall) override;
+    void PutPortal(GLWall *wall, int ptype) override;
 
 };
 
